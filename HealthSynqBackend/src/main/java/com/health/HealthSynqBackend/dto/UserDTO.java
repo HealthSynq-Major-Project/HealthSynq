@@ -56,14 +56,6 @@ public class UserDTO {
         this.userName = userName;
     }
 
-    public Boolean getDiabetic() {
-        return isDiabetic;
-    }
-
-    public void setDiabetic(Boolean diabetic) {
-        isDiabetic = diabetic;
-    }
-
     public Integer getAge() {
         return age;
     }
@@ -140,9 +132,10 @@ public class UserDTO {
         return isDiabetic;
     }
 
-    public void setIsDiabetic(Boolean diabetic) {
-        isDiabetic = diabetic;
+    public void setIsDiabetic(Boolean isDiabetic) {
+        this.isDiabetic = isDiabetic;
     }
+
 
     @Override
     public String toString() {
