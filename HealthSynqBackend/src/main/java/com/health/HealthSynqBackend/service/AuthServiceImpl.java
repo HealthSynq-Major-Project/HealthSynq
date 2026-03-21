@@ -76,7 +76,7 @@ public class AuthServiceImpl implements AuthService{
 
         // Password Validation and Conversion to Bcrypt
         String password = theUser.getPassword();
-        if(password.length()<8){
+        if(password.length()<6){
             throw new InvalidRequestException("Password length is less");
         }
         try{
