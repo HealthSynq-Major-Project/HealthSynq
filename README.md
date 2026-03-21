@@ -224,7 +224,7 @@ Enhances recommendations using:
 
 | Layer            | Technology            |
 | ---------------- | --------------------- |
-| Frontend         | React / Flutter       |
+| Frontend         | Kotlin       
 | Backend          | SpringBoot / Django      |
 | Database         | PostgreSQL            |
 | Machine Learning | Python (scikit-learn) |
