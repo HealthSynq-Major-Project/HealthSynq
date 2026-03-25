@@ -1,8 +1,7 @@
 package com.health.HealthSynqBackend.controllers;
 
 import com.health.HealthSynqBackend.dto.LoginDTO;
-import com.health.HealthSynqBackend.dto.LoginResponse;
-import com.health.HealthSynqBackend.dto.SignupResponse;
+import com.health.HealthSynqBackend.dto.AuthResponse;
 import com.health.HealthSynqBackend.dto.UserDTO;
 import com.health.HealthSynqBackend.dto.UserCheckDTO;
 import com.health.HealthSynqBackend.service.AuthService;
@@ -18,16 +17,16 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public SignupResponse registerUser(@RequestBody UserDTO theUser){
+    public AuthResponse registerUser(@RequestBody UserDTO theUser){
         System.out.println(theUser);
         return authService.saveUser(theUser);
     }
     @PostMapping("/check-user")
-    public SignupResponse checkUser(@RequestBody UserCheckDTO theUser){
+    public AuthResponse checkUser(@RequestBody UserCheckDTO theUser){
         return authService.existUser(theUser);
     }
     @PostMapping("/login")
-    public LoginResponse loginUser(@RequestBody LoginDTO theUser){
+    public AuthResponse loginUser(@RequestBody LoginDTO theUser){
         return authService.loginUser(theUser);
     }
 }

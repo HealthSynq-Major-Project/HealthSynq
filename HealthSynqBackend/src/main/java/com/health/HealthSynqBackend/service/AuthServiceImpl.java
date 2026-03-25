@@ -2,8 +2,7 @@ package com.health.HealthSynqBackend.service;
 
 import com.health.HealthSynqBackend.dao.AuthDao;
 import com.health.HealthSynqBackend.dto.LoginDTO;
-import com.health.HealthSynqBackend.dto.LoginResponse;
-import com.health.HealthSynqBackend.dto.SignupResponse;
+import com.health.HealthSynqBackend.dto.AuthResponse;
 import com.health.HealthSynqBackend.dto.UserDTO;
 import com.health.HealthSynqBackend.dto.UserCheckDTO;
 import com.health.HealthSynqBackend.entities.UserGoal;
@@ -12,6 +11,7 @@ import com.health.HealthSynqBackend.entities.Users;
 import com.health.HealthSynqBackend.exception.InvalidCredentialException;
 import com.health.HealthSynqBackend.exception.InvalidRequestException;
 import com.health.HealthSynqBackend.exception.UserAlreadyExistsException;
+import com.health.HealthSynqBackend.security.JWTService;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,15 +22,17 @@ import java.time.LocalDateTime;
 public class AuthServiceImpl implements AuthService{
     private AuthDao authDao;
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+    private JWTService jwt;
 
-    public AuthServiceImpl(AuthDao theAuthDao,BCryptPasswordEncoder theBcryptPasswordEncoder){
+    public AuthServiceImpl(AuthDao theAuthDao,BCryptPasswordEncoder theBcryptPasswordEncoder, JWTService myJwt){
         authDao = theAuthDao;
         bCryptPasswordEncoder = theBcryptPasswordEncoder;
+        jwt = myJwt;
     }
 
     @Transactional
-    public SignupResponse saveUser(UserDTO theUser){
-        SignupResponse signupResponse = new SignupResponse();
+    public AuthResponse saveUser(UserDTO theUser){
+        AuthResponse signupResponse = new AuthResponse();
 
         if(theUser==null){
             signupResponse.setSuccess(false);
@@ -65,12 +67,16 @@ public class AuthServiceImpl implements AuthService{
 
         String email = theUser.getEmail().trim().toLowerCase();
 
-        if (!email.matches("^[A-Za-z0-9._%+-]+@(gmail|googlemail)\\.[A-Za-z.]+$")) {
-            throw new InvalidRequestException("Invalid Gmail format");
+        if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new InvalidRequestException("Invalid email format");
         }
         theUser.setEmail(email);
 
         if(authDao.existByEmail(email)){
+            throw new UserAlreadyExistsException("User Aleady Exists!");
+        }
+
+        if(authDao.existByUserName(theUser.getUserName())){
             throw new UserAlreadyExistsException("User Aleady Exists!");
         }
 
@@ -130,15 +136,19 @@ public class AuthServiceImpl implements AuthService{
         userGoal.setUser(user);
         authDao.saveUserGoal(userGoal);
 
+        String token = jwt.generateToken(user.getId(),user.getEmail());
+
         signupResponse.setSuccess(true);
         signupResponse.setMessage("User registered successfully");
         signupResponse.setStatusCode(201);
         signupResponse.setTimeStamp(System.currentTimeMillis());
+        signupResponse.setToken(token);
+        signupResponse.setUserName(user.getUserName());
 
         return signupResponse;
     }
 
-    public SignupResponse existUser(UserCheckDTO theUser){
+    public AuthResponse existUser(UserCheckDTO theUser){
 
         if((theUser.getEmail() == null || theUser.getEmail().isBlank()) &&
                 (theUser.getUserName() == null || theUser.getUserName().isBlank())) {
@@ -159,8 +169,8 @@ public class AuthServiceImpl implements AuthService{
         if(theUser.getEmail() != null && !theUser.getEmail().isBlank()){
             String email = theUser.getEmail().trim().toLowerCase();
 
-            if (!email.matches("^[A-Za-z0-9._%+-]+@(gmail|googlemail)\\.[A-Za-z.]+$")) {
-                throw new InvalidRequestException("Invalid Gmail format");
+            if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+                throw new InvalidRequestException("Invalid email format");
             }
             theUser.setEmail(email);
             ans = authDao.existByEmail(theUser.getEmail());
@@ -168,7 +178,7 @@ public class AuthServiceImpl implements AuthService{
             ans = authDao.existByUserName(theUser.getUserName());
         }
 
-        SignupResponse response = new SignupResponse();
+        AuthResponse response = new AuthResponse();
 
         response.setTimeStamp(System.currentTimeMillis());
         response.setStatusCode(200);
@@ -184,20 +194,21 @@ public class AuthServiceImpl implements AuthService{
         return response;
     }
 
-    public LoginResponse loginUser(LoginDTO theUser){
+    public AuthResponse loginUser(LoginDTO theUser){
         String identifier = theUser.getIdentifier();
-        identifier = identifier.trim();
+
 
         if(identifier == null || identifier.isBlank()){
             throw new InvalidCredentialException("Identifier cannot be empty");
         }
+
+        identifier = identifier.trim();
 
         if(theUser.getPassword()==null || theUser.getPassword().isEmpty()){
             throw new InvalidCredentialException("Password cannot be empty");
         }
 
         Users dbUser = authDao.findUser(identifier);
-        LoginResponse response = new LoginResponse();
 
         if(dbUser==null){
             throw new InvalidCredentialException("Invalid Username/Email");
@@ -206,7 +217,9 @@ public class AuthServiceImpl implements AuthService{
         if(!bCryptPasswordEncoder.matches(theUser.getPassword(),dbUser.getPassword())){
             throw new InvalidCredentialException("Password mismatch");
         }
-        return new LoginResponse(200, "Login Successful",true,System.currentTimeMillis());
+
+        String token = jwt.generateToken(dbUser.getId(),dbUser.getEmail());
+        return new AuthResponse(true, "Login Successful",200,System.currentTimeMillis(),token,dbUser.getUserName());
     }
 
     private double calculateBMI(long weightGrams, int heightCm){
@@ -229,7 +242,7 @@ public class AuthServiceImpl implements AuthService{
             return (int)Math.round(height * 2.54);
         }
 
-        return 0; // should never happen since validation is already done
+        throw new InvalidRequestException("Invalid height type"); // should never happen since validation is already done
     }
 
     private long convertWeightToGrams(int weight, String weightType){
@@ -242,7 +255,7 @@ public class AuthServiceImpl implements AuthService{
             return (long)(weight * 453.592);
         }
 
-        return 0; // this should never happen since validation is already done
+        throw new InvalidRequestException("Invalid weight type"); // this should never happen since validation is already done
     }
 
     private void validateWeight(Integer weight, String weightType){

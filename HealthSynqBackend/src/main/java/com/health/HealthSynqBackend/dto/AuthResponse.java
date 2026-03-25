@@ -1,20 +1,27 @@
 package com.health.HealthSynqBackend.dto;
 
-public class SignupResponse {
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class AuthResponse {
     private boolean success;
     private String message;
     private int statusCode;
     private long timeStamp;
+    private String token;
+    private String userName;
 
-    public SignupResponse(){
+    public AuthResponse(){
 
     }
 
-    public SignupResponse(boolean success, String message, int statusCode, long timeStamp) {
+    public AuthResponse(boolean success, String message, int statusCode, long timeStamp, String token, String userName) {
         this.success = success;
         this.message = message;
         this.statusCode = statusCode;
         this.timeStamp = timeStamp;
+        this.token = token;
+        this.userName = userName;
     }
 
     public boolean isSuccess() {
@@ -47,6 +54,22 @@ public class SignupResponse {
 
     public void setTimeStamp(long timeStamp) {
         this.timeStamp = timeStamp;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
     }
 
     @Override
