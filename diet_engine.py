@@ -4,7 +4,7 @@ import numpy as np
 import random
 import warnings
 from collections import Counter
-from IPython.display import display
+# from IPython.display import display
 from sqlalchemy import create_engine
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -719,28 +719,28 @@ def generate_daily_plan(glucose_mg_dl=130, daily_kcal=2400, diet='veg', seed=Non
 FMT = {'portions':'{:.0f}','kcal':'{:.0f}','carb_g':'{:.1f}','protein_g':'{:.1f}',
        'fat_g':'{:.1f}','fibre_g':'{:.1f}','glycemic_score':'{:.3f}','composite_score':'{:.3f}'}
 
-def display_plan(plan, show_scores=True):
-    s = plan['summary']; pct = s['pct_achieved']
-    bar = '█'*int(pct//5)+'░'*(20-int(pct//5))
-    print('='*72); print('  HealthSYNQ-D v8  ·  FINAL')
-    print(f"  Glucose : {s['glucose_mg_dl']} mg/dL  [{s['status']}]")
-    print(f"  Diet    : {s['diet'].upper()}")
-    print(f"  Target  : {s['daily_kcal_target']:.0f} kcal  Generated: {s['total_kcal']:.0f} kcal  ({pct:.1f}%)")
-    print(f"  [{bar}]")
-    print('='*72)
-    show_cols = OUTPUT_COLS if show_scores else [c for c in OUTPUT_COLS if c not in ('glycemic_score','composite_score')]
-    for slot in ['breakfast','lunch','dinner','snack']:
-        meal = plan[slot]; got = s['meal_kcal'][slot]; tgt = s['kcal_targets'][slot]
-        valid = validate_meal(meal, slot)
-        print(f"\n{'─'*72}")
+# def display_plan(plan, show_scores=True):
+#     s = plan['summary']; pct = s['pct_achieved']
+#     bar = '█'*int(pct//5)+'░'*(20-int(pct//5))
+#     print('='*72); print('  HealthSYNQ-D v8  ·  FINAL')
+#     print(f"  Glucose : {s['glucose_mg_dl']} mg/dL  [{s['status']}]")
+#     print(f"  Diet    : {s['diet'].upper()}")
+#     print(f"  Target  : {s['daily_kcal_target']:.0f} kcal  Generated: {s['total_kcal']:.0f} kcal  ({pct:.1f}%)")
+#     print(f"  [{bar}]")
+#     print('='*72)
+#     show_cols = OUTPUT_COLS if show_scores else [c for c in OUTPUT_COLS if c not in ('glycemic_score','composite_score')]
+#     for slot in ['breakfast','lunch','dinner','snack']:
+#         meal = plan[slot]; got = s['meal_kcal'][slot]; tgt = s['kcal_targets'][slot]
+#         valid = validate_meal(meal, slot)
+#         print(f"\n{'─'*72}")
         
-        print(f"  Target {tgt:.0f} kcal → {got:.0f} kcal ({got/tgt*100:.0f}%)  {'✅ VALID' if valid else '⚠️ INCOMPLETE'}")
-        print(f"{'─'*72}")
-        if meal.empty: print('  ⚠️  No items')
-        else: display(meal[show_cols].style.format({k:v for k,v in FMT.items() if k in show_cols}).set_properties(**{'text-align':'left'}).hide(axis='index'))
-    print(f"\n{'='*72}"); print('  📊 DAILY TOTALS')
-    print(f"  Energy: {s['total_kcal']:.0f}/{s['daily_kcal_target']:.0f} kcal ({pct:.1f}%)  |  Carbs: {s['total_carb_g']:.1f}g  |  Protein: {s['total_protein_g']:.1f}g  |  Fat: {s['total_fat_g']:.1f}g")
-    print('='*72)
+#         print(f"  Target {tgt:.0f} kcal → {got:.0f} kcal ({got/tgt*100:.0f}%)  {'✅ VALID' if valid else '⚠️ INCOMPLETE'}")
+#         print(f"{'─'*72}")
+#         if meal.empty: print('  ⚠️  No items')
+#         else: display(meal[show_cols].style.format({k:v for k,v in FMT.items() if k in show_cols}).set_properties(**{'text-align':'left'}).hide(axis='index'))
+#     print(f"\n{'='*72}"); print('  📊 DAILY TOTALS')
+#     print(f"  Energy: {s['total_kcal']:.0f}/{s['daily_kcal_target']:.0f} kcal ({pct:.1f}%)  |  Carbs: {s['total_carb_g']:.1f}g  |  Protein: {s['total_protein_g']:.1f}g  |  Fat: {s['total_fat_g']:.1f}g")
+#     print('='*72)
 
 # print('✅ display_plan() defined')
 
