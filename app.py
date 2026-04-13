@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+import random
+
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
@@ -15,6 +18,14 @@ class DietRequest(BaseModel):
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+@app.get("/ping")
+def ping():
+    return {
+        "status": "ok",
+        "message": random.choice(["ok", "yumbedded"]),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat()
+    }
 
 def df_to_records(df):
     if df is None or df.empty:
