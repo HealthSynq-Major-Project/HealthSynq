@@ -35,7 +35,8 @@ public class JWTFilter extends OncePerRequestFilter {
 
         if (path.startsWith("/api/auth") ||
                 path.equals("/ping") ||
-                path.equals("/")) {
+                path.equals("/") ||
+                path.equals("/swagger-ui/index.html#/")){
 
             filterChain.doFilter(request, response);
             return;
