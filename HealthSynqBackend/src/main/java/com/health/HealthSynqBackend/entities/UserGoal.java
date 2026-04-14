@@ -2,6 +2,7 @@ package com.health.HealthSynqBackend.entities;
 
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -19,6 +20,9 @@ public class UserGoal {
     @Column(name="target_duration_days")
     private int targetDuration;
 
+    @Column(name="start_date")
+    private LocalDateTime startDate;
+
     @Column(name="created_at")
     private LocalDateTime createdAt;
 
@@ -29,10 +33,11 @@ public class UserGoal {
     public UserGoal() {
     }
 
-    public UserGoal(long targetWeight, int targetDuration, LocalDateTime createdAt) {
+    public UserGoal(long targetWeight, int targetDuration, LocalDateTime startDate, LocalDateTime createdAt) {
         this.targetWeight = targetWeight;
         this.targetDuration = targetDuration;
         this.createdAt = createdAt;
+        this.startDate = startDate;
     }
 
     public int getId() {
@@ -75,13 +80,23 @@ public class UserGoal {
         this.user = user;
     }
 
+    public LocalDateTime getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDateTime startDate) {
+        this.startDate = startDate;
+    }
+
     @Override
     public String toString() {
         return "UserGoal{" +
                 "id=" + id +
                 ", targetWeight=" + targetWeight +
                 ", targetDuration=" + targetDuration +
+                ", startDate=" + startDate +
                 ", createdAt=" + createdAt +
+                ", user=" + user +
                 '}';
     }
 }
