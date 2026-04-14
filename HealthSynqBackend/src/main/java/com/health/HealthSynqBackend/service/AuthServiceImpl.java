@@ -132,7 +132,8 @@ public class AuthServiceImpl implements AuthService{
         userProfile.setUser(user);
         authDao.saveUserProfile(userProfile);
 
-        UserGoal userGoal = new UserGoal(targetWeightGm,theUser.getTargetDurationDays(),LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        UserGoal userGoal = new UserGoal(targetWeightGm,theUser.getTargetDurationDays(), now,now);
         userGoal.setUser(user);
         authDao.saveUserGoal(userGoal);
 

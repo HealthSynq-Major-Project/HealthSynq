@@ -1,6 +1,7 @@
 package com.health.HealthSynqBackend.exception;
 
 import com.health.HealthSynqBackend.dto.AuthResponse;
+import com.health.HealthSynqBackend.dto.GenericResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -56,5 +57,17 @@ public class GlobalExceptionHandler {
         response.setUserName(null);
 
         return new ResponseEntity<>(response,HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(GenericBadRequestException.class)
+    public ResponseEntity<GenericResponse> handleException(GenericBadRequestException e){
+        GenericResponse response = new GenericResponse();
+        response.setSuccess(false);
+        response.setMessage(e.getMessage());
+        response.setStatusCode(400);
+        response.setTimeStamp(System.currentTimeMillis());
+        response.setData(null); // if you have this field
+
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 }

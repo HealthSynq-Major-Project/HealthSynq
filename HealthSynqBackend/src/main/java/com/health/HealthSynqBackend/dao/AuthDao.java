@@ -11,4 +11,5 @@ public interface AuthDao {
     public void saveUserProfile(UserProfile userProfile);
     public boolean existByUserName(String userName);
     public Users findUser(String identifier);
+
 }
