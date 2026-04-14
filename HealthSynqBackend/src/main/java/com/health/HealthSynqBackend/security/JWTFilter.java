@@ -29,7 +29,7 @@ public class JWTFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
 
         String path = request.getServletPath();
-        System.out.println("JWT Filter triggered for: " + path);
+        System.out.println("JWT Filter triggered for url : : " + path);
 
         // Skip auth api calls
 
