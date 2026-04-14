@@ -28,7 +28,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/ping",
-                                "/"
+                                "/",
+                                "/swagger-ui/index.html#/"
                         ).permitAll() // Allow all endpoints (for development)
                         .anyRequest().authenticated()
                 )
