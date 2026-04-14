@@ -29,7 +29,9 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/ping",
                                 "/",
-                                "/swagger-ui/index.html#/"
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html"
                         ).permitAll() // Allow all endpoints (for development)
                         .anyRequest().authenticated()
                 )
