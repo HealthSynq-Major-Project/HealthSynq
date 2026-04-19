@@ -2,6 +2,7 @@ package com.health.HealthSynqBackend.service;
 
 import com.health.HealthSynqBackend.dao.HealthDAO;
 import com.health.HealthSynqBackend.dto.GenericResponse;
+import com.health.HealthSynqBackend.dto.GlucoseDTO;
 import com.health.HealthSynqBackend.dto.HealthDTO;
 import com.health.HealthSynqBackend.entities.*;
 import com.health.HealthSynqBackend.exception.GenericBadRequestException;
@@ -215,30 +216,54 @@ public class HealthServiceImpl implements HealthService{
         return (int) Math.round(targetCalories);
     }
 
-    private int getBaselineGlucose(Users user) {
-        UserProfile userProfile = healthDAO.findUserProfileByUser(user);
-
-        if (userProfile == null) {
-            throw new GenericBadRequestException("User profile not found");
+    @Override
+    @Transactional
+    public GenericResponse updateGlucose(int userId, GlucoseDTO glucoseDTO){
+        if(glucoseDTO==null || glucoseDTO.getGlucose()==null){
+            throw new GenericBadRequestException("Glucose Level is required");
         }
 
-        int age = userProfile.getAge();
-        String gender = userProfile.getGender();
+        int glucose = glucoseDTO.getGlucose();
 
-        int base;
-
-        if (age < 18) base = 85;
-        else if (age < 40) base = 90;
-        else if (age < 60) base = 92;
-        else base = 95;
-
-        // VERY SMALL adjustment
-        if ("female".equalsIgnoreCase(gender)) {
-            base -= 2; // slightly lower
+        if (glucose < 40 || glucose > 500) {
+            throw new GenericBadRequestException("Invalid glucose level");
         }
 
-        return base;
+        Users user = healthDAO.findUserById(userId);
+
+        if(user==null){
+            throw new GenericBadRequestException("User is not found");
+        }
+
+        UserGlucoseLog userGlucoseLog = new UserGlucoseLog();
+        userGlucoseLog.setUsers(user);
+        userGlucoseLog.setGlucoseLevel(glucose);
+        userGlucoseLog.setCreatedAt(LocalDateTime.now());
+        userGlucoseLog.setRecordedAt(LocalDateTime.now());
+
+        healthDAO.saveGlucoseLog(userGlucoseLog);
+
+        UserCurrentHealth userCurrentHealth = healthDAO.findUser(user);
+
+        if(userCurrentHealth==null){
+            userCurrentHealth = new UserCurrentHealth(user);
+            userCurrentHealth.setCreatedAt(LocalDateTime.now());
+        }
+
+        userCurrentHealth.setGlucoseLevel(glucose);
+        userCurrentHealth.setUpdatedAt(LocalDateTime.now());
+
+        healthDAO.saveUserCurrentHealth(userCurrentHealth);
+
+        return new GenericResponse(
+                true,
+                "Glucose level updated successfully",
+                200,
+                null
+        );
     }
+
+
     private void validateHealthData(HealthDTO dto) {
 
         if (dto.getSteps() != null) {
@@ -271,4 +296,7 @@ public class HealthServiceImpl implements HealthService{
             }
         }
     }
+
+
+
 }
