@@ -6,6 +6,7 @@ import jakarta.persistence.TypedQuery;
 import org.apache.catalina.User;
 import org.springframework.stereotype.Repository;
 
+import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -77,6 +78,22 @@ public class HealthDAOImpl implements HealthDAO{
 
         List<UserGoal> theUser = query.getResultList();
         return theUser.isEmpty() ? null : theUser.get(0);
+    }
+
+    @Override
+    public UserGlucoseLog findLatestGlucose(Users user){
+        TypedQuery<UserGlucoseLog> theQuery = entityManager.createQuery("from UserGlucoseLog g Where g.user = :user Order By g.recordedAt DESC",UserGlucoseLog.class);
+
+        theQuery.setParameter("user",user);
+        theQuery.setMaxResults(1);
+        List<UserGlucoseLog> result = theQuery.getResultList();
+
+        return result.isEmpty()?null : result.get(0);
+    }
+
+    @Override
+    public void saveGlucoseLog(UserGlucoseLog userGlucoseLog){
+        entityManager.persist(userGlucoseLog);
     }
 
 }

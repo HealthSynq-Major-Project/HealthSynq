@@ -12,4 +12,6 @@ public interface HealthDAO {
     public void saveUserCurrentHealth(UserCurrentHealth user);
     public UserProfile findUserProfileByUser(Users user);
     public UserGoal findGoalByUserId(int userId);
+    UserGlucoseLog findLatestGlucose(Users user);
+    void saveGlucoseLog(UserGlucoseLog userGlucoseLog);
 }

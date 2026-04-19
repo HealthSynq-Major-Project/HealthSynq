@@ -1,6 +1,7 @@
 package com.health.HealthSynqBackend.controllers;
 
 import com.health.HealthSynqBackend.dto.GenericResponse;
+import com.health.HealthSynqBackend.dto.GlucoseDTO;
 import com.health.HealthSynqBackend.dto.HealthDTO;
 import com.health.HealthSynqBackend.service.HealthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,4 +31,16 @@ public class HealthDataController {
                 .status(response.getStatusCode())
                 .body(response);
     }
+
+
+    @PostMapping("/glucose")
+    public ResponseEntity<GenericResponse> saveGlucoseLevels(HttpServletRequest request,  @RequestBody GlucoseDTO glucoseDTO){
+        int userId = (int) request.getAttribute("userId");
+
+        GenericResponse response = healthService.updateGlucose(userId,glucoseDTO);
+
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+
 }
