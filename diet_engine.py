@@ -6,7 +6,11 @@ import warnings
 from collections import Counter
 # from IPython.display import display
 from sqlalchemy import create_engine
+
 DATABASE_URL = os.getenv("DATABASE_URL")
+print("=" * 80)
+print("DATABASE_URL =", DATABASE_URL)
+print("=" * 80)
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
@@ -25,18 +29,6 @@ pd.set_option('display.float_format', '{:.1f}'.format)
 PER100G = ['food_code','food_name','servings_unit','energy_kcal','carb_g','protein_g','fat_g','freesugar_g','fibre_g']
 PER_SRV = ['unit_serving_energy_kcal','unit_serving_carb_g','unit_serving_protein_g',
            'unit_serving_fat_g','unit_serving_freesugar_g','unit_serving_fibre_g']
-DATABASE_URL = "postgresql://ritik:UXhJKATfH6Bk4qLkD1Q7eWzeS7g59Wa3@dpg-d7dpr8d7vvec73eule1g-a.oregon-postgres.render.com/healthsyncq_diet_dataset"
-
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"sslmode": "require"}   # 🔥 required for Render
-)
-# Load full table
-df = pd.read_sql("SELECT * FROM food_data", engine)
-
-df.head()
-
 raw = pd.read_sql("SELECT * FROM food_data", engine)
 df  = raw[PER100G + PER_SRV].copy()
 df['food_name']     = df['food_name'].str.strip()
@@ -529,10 +521,12 @@ def optimize_calories(items, spool, C, day_used, week_used, diet='veg', slot=Non
             max_p = MAX_SRV.get(role, 1)
             if role == 'breakfast_carb' and it['_unit_kcal'] < 200:
                 max_p = 5
-            if it['portions'] < max_p:
+            carb_left = C['carb_cap'] - c_used()
+            if it['portions'] < max_p and (it['_unit_carb'] <= carb_left):
                 it['portions'] += 1
                 it['kcal'] += round(it['_unit_kcal'], 1)
                 it['carb_g'] += round(it['_unit_carb'], 1)
+
 
     return items
 
@@ -667,6 +661,273 @@ def build_snack(pool, C, day_used, week_used, diet):
     return _to_df(items)
 
 # print('✅ Meal builders updated for stronger non-veg allocation')
+
+MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack']
+
+def _clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+def _remaining_slots_from(current_slot):
+    if current_slot not in MEAL_ORDER:
+        raise ValueError(f"current_slot must be one of {MEAL_ORDER}")
+    i = MEAL_ORDER.index(current_slot)
+    return MEAL_ORDER[i:]
+
+def _copy_constraints(C):
+    return {k: dict(v) for k, v in C.items()}
+
+def _reallocate_constraints_for_remaining(C, remaining_slots, remaining_kcal):
+    C_dyn = _copy_constraints(C)
+    if not remaining_slots:
+        return C_dyn
+
+    base_remaining = sum(C[s]['kcal_target'] for s in remaining_slots) + 1e-9
+    for slot in remaining_slots:
+        weight = C[slot]['kcal_target'] / base_remaining
+        new_kcal = round(remaining_kcal * weight, 1)
+        scale = new_kcal / (C[slot]['kcal_target'] + 1e-9)
+        carb_scale = _clamp(scale, 0.80, 1.30)
+
+        C_dyn[slot]['kcal_target'] = new_kcal
+        C_dyn[slot]['kcal_lo'] = round(new_kcal * 0.88, 1)
+        C_dyn[slot]['kcal_hi'] = round(new_kcal * 1.15, 1)
+        C_dyn[slot]['carb_cap'] = round(C[slot]['carb_cap'] * carb_scale, 1)
+    return C_dyn
+
+def _build_dynamic_constraints(
+    glucose_mg_dl,
+    daily_kcal,
+    current_slot,
+    consumed_kcal_so_far,
+    burned_kcal_so_far,
+    burn_compensation_ratio,
+    max_extra_kcal_ratio,
+):
+    C_base = get_constraints(glucose_mg_dl, daily_kcal)
+    remaining_slots = _remaining_slots_from(current_slot)
+    base_remaining_kcal = sum(C_base[s]['kcal_target'] for s in remaining_slots)
+
+    burn_ratio = _clamp(float(burn_compensation_ratio), 0.0, 1.2)
+    extra_cap = daily_kcal * _clamp(float(max_extra_kcal_ratio), 0.0, 1.5)
+    burn_credit = min(max(0.0, float(burned_kcal_so_far)) * burn_ratio, extra_cap)
+
+    remaining_kcal_raw = float(daily_kcal) - max(0.0, float(consumed_kcal_so_far)) + burn_credit
+    min_remaining_floor = base_remaining_kcal * 0.10
+    remaining_kcal = _clamp(remaining_kcal_raw, min_remaining_floor, base_remaining_kcal + extra_cap)
+    C_dyn = _reallocate_constraints_for_remaining(C_base, remaining_slots, remaining_kcal)
+    return C_base, C_dyn, remaining_slots, burn_ratio, burn_credit
+
+def _infer_last_grain(already_used_foods):
+    if not already_used_foods:
+        return None
+    for name in reversed(already_used_foods):
+        g = assign_grain(str(name))
+        if g in ('wheat', 'rice', 'millet', 'oats', 'semolina'):
+            return g
+    return None
+
+def generate_dynamic_plan(
+    glucose_mg_dl=130,
+    daily_kcal=2400,
+    diet='veg',
+    current_slot='breakfast',
+    consumed_kcal_so_far=0.0,
+    burned_kcal_so_far=0.0,
+    burn_compensation_ratio=0.65,
+    max_extra_kcal_ratio=0.50,
+    seed=None,
+    week_used=None,
+    already_used_foods=None,
+):
+    """
+    Generate a dynamic plan for the remaining day, starting from current_slot.
+    This keeps the existing food scoring and meal builders unchanged.
+    """
+    assert diet in ('veg', 'egg', 'nonveg'), "diet must be 'veg', 'egg', or 'nonveg'"
+    if seed is not None:
+        random.seed(seed); np.random.seed(seed)
+    if week_used is None:
+        week_used = {}
+    if already_used_foods is None:
+        already_used_foods = []
+
+    C_base, C_dyn, remaining_slots, burn_ratio, burn_credit = _build_dynamic_constraints(
+        glucose_mg_dl=glucose_mg_dl,
+        daily_kcal=daily_kcal,
+        current_slot=current_slot,
+        consumed_kcal_so_far=consumed_kcal_so_far,
+        burned_kcal_so_far=burned_kcal_so_far,
+        burn_compensation_ratio=burn_compensation_ratio,
+        max_extra_kcal_ratio=max_extra_kcal_ratio,
+    )
+    day_used = set(already_used_foods)
+    day_state = {'last_grain': _infer_last_grain(already_used_foods)}
+    meals = {k: pd.DataFrame(columns=OUTPUT_COLS) for k in MEAL_ORDER}
+
+    meat_so_far = _count_meat_items(week_used)
+    force_lunch_meat = (diet == 'nonveg' and meat_so_far < 4)
+    force_dinner_meat = (diet == 'nonveg' and meat_so_far < 7)
+
+    for slot in remaining_slots:
+        if slot == 'breakfast':
+            meal = build_breakfast(pool, C_dyn, day_used, week_used, diet, day_state)
+            meals['breakfast'] = meal
+            if not meal.empty:
+                cr = meal[meal['food_role'].isin(['roti','breakfast_carb','rice'])]
+                if not cr.empty:
+                    day_state['last_grain'] = cr.iloc[0]['grain_category']
+        elif slot == 'lunch':
+            meal = build_thali(
+                pool, 'lunch', C_dyn, day_used, week_used, diet,
+                avoid_grain=day_state.get('last_grain'),
+                force_meat=force_lunch_meat
+            )
+            meals['lunch'] = meal
+            if not meal.empty:
+                rr = meal[meal['food_role'] == 'roti']
+                if not rr.empty:
+                    day_state['last_grain'] = rr.iloc[0]['grain_category']
+        elif slot == 'dinner':
+            meal = build_thali(
+                pool, 'dinner', C_dyn, day_used, week_used, diet,
+                lighter=True,
+                avoid_grain=day_state.get('last_grain'),
+                force_meat=force_dinner_meat
+            )
+            meals['dinner'] = meal
+        elif slot == 'snack':
+            meals['snack'] = build_snack(pool, C_dyn, day_used, week_used, diet)
+
+    non_empty = [m for m in meals.values() if not m.empty]
+    all_items = pd.concat(non_empty) if non_empty else pd.DataFrame(columns=OUTPUT_COLS)
+    meal_kcal = {s: round(meals[s]['kcal'].sum(), 1) if not meals[s].empty else 0.0 for s in MEAL_ORDER}
+
+    target_with_activity = round(float(daily_kcal) + burn_credit, 1)
+    projected_total = round(float(consumed_kcal_so_far) + float(all_items['kcal'].sum()), 1)
+
+    summary = {
+        'glucose_mg_dl': glucose_mg_dl,
+        'status': glucose_status(glucose_mg_dl),
+        'diet': diet,
+        'current_slot': current_slot,
+        'remaining_slots': remaining_slots,
+        'daily_kcal_target': float(daily_kcal),
+        'consumed_kcal_so_far': round(float(consumed_kcal_so_far), 1),
+        'burned_kcal_so_far': round(float(burned_kcal_so_far), 1),
+        'burn_compensation_ratio': burn_ratio,
+        'burn_credit_applied': round(burn_credit, 1),
+        'target_with_activity': target_with_activity,
+        'planned_remaining_kcal_target': round(sum(C_dyn[s]['kcal_target'] for s in remaining_slots), 1),
+        'generated_remaining_kcal': round(float(all_items['kcal'].sum()), 1),
+        'projected_day_kcal': projected_total,
+        'projected_pct_of_target': round((projected_total / (target_with_activity + 1e-9)) * 100, 1),
+        'total_carb_g': round(float(all_items['carb_g'].sum()), 1) if not all_items.empty else 0.0,
+        'total_protein_g': round(float(all_items['protein_g'].sum()), 1) if not all_items.empty else 0.0,
+        'total_fat_g': round(float(all_items['fat_g'].sum()), 1) if not all_items.empty else 0.0,
+        'total_fibre_g': round(float(all_items['fibre_g'].sum()), 1) if not all_items.empty else 0.0,
+        'meal_kcal': meal_kcal,
+        'kcal_targets': {s: C_dyn[s]['kcal_target'] for s in C_dyn},
+        'meat_items_week': _count_meat_items(week_used),
+    }
+
+    return dict(
+        breakfast=meals['breakfast'],
+        lunch=meals['lunch'],
+        dinner=meals['dinner'],
+        snack=meals['snack'],
+        summary=summary,
+        week_used=week_used,
+    )
+
+def generate_dynamic_meal(
+    glucose_mg_dl=130,
+    daily_kcal=2400,
+    diet='veg',
+    meal_slot='breakfast',
+    consumed_kcal_so_far=0.0,
+    burned_kcal_so_far=0.0,
+    burn_compensation_ratio=0.65,
+    max_extra_kcal_ratio=0.50,
+    seed=None,
+    week_used=None,
+    already_used_foods=None,
+):
+    """
+    Generate only one meal slot dynamically using current intake/activity values.
+    """
+    assert diet in ('veg', 'egg', 'nonveg'), "diet must be 'veg', 'egg', or 'nonveg'"
+    if meal_slot not in MEAL_ORDER:
+        raise ValueError(f"meal_slot must be one of {MEAL_ORDER}")
+    if seed is not None:
+        random.seed(seed); np.random.seed(seed)
+    if week_used is None:
+        week_used = {}
+    if already_used_foods is None:
+        already_used_foods = []
+
+    C_base, C_dyn, remaining_slots, burn_ratio, burn_credit = _build_dynamic_constraints(
+        glucose_mg_dl=glucose_mg_dl,
+        daily_kcal=daily_kcal,
+        current_slot=meal_slot,
+        consumed_kcal_so_far=consumed_kcal_so_far,
+        burned_kcal_so_far=burned_kcal_so_far,
+        burn_compensation_ratio=burn_compensation_ratio,
+        max_extra_kcal_ratio=max_extra_kcal_ratio,
+    )
+
+    day_used = set(already_used_foods)
+    day_state = {'last_grain': _infer_last_grain(already_used_foods)}
+    meat_so_far = _count_meat_items(week_used)
+    force_lunch_meat = (diet == 'nonveg' and meat_so_far < 4)
+    force_dinner_meat = (diet == 'nonveg' and meat_so_far < 7)
+
+    if meal_slot == 'breakfast':
+        meal = build_breakfast(pool, C_dyn, day_used, week_used, diet, day_state)
+    elif meal_slot == 'lunch':
+        meal = build_thali(
+            pool, 'lunch', C_dyn, day_used, week_used, diet,
+            avoid_grain=day_state.get('last_grain'),
+            force_meat=force_lunch_meat
+        )
+    elif meal_slot == 'dinner':
+        meal = build_thali(
+            pool, 'dinner', C_dyn, day_used, week_used, diet,
+            lighter=True,
+            avoid_grain=day_state.get('last_grain'),
+            force_meat=force_dinner_meat
+        )
+    else:
+        meal = build_snack(pool, C_dyn, day_used, week_used, diet)
+
+    generated_kcal = round(float(meal['kcal'].sum()), 1) if not meal.empty else 0.0
+    target_with_activity = round(float(daily_kcal) + burn_credit, 1)
+    projected_day_kcal = round(float(consumed_kcal_so_far) + generated_kcal, 1)
+
+    summary = {
+        'glucose_mg_dl': glucose_mg_dl,
+        'status': glucose_status(glucose_mg_dl),
+        'diet': diet,
+        'meal_slot': meal_slot,
+        'remaining_slots': remaining_slots,
+        'daily_kcal_target': float(daily_kcal),
+        'consumed_kcal_so_far': round(float(consumed_kcal_so_far), 1),
+        'burned_kcal_so_far': round(float(burned_kcal_so_far), 1),
+        'burn_compensation_ratio': burn_ratio,
+        'burn_credit_applied': round(burn_credit, 1),
+        'target_with_activity': target_with_activity,
+        'meal_kcal_target': round(C_dyn[meal_slot]['kcal_target'], 1),
+        'meal_kcal_generated': generated_kcal,
+        'projected_day_kcal_after_meal': projected_day_kcal,
+        'projected_pct_of_target': round((projected_day_kcal / (target_with_activity + 1e-9)) * 100, 1),
+        'meal_carb_g': round(float(meal['carb_g'].sum()), 1) if not meal.empty else 0.0,
+        'meal_protein_g': round(float(meal['protein_g'].sum()), 1) if not meal.empty else 0.0,
+        'meal_fat_g': round(float(meal['fat_g'].sum()), 1) if not meal.empty else 0.0,
+        'meal_fibre_g': round(float(meal['fibre_g'].sum()), 1) if not meal.empty else 0.0,
+        'kcal_targets': {s: C_dyn[s]['kcal_target'] for s in C_dyn},
+        'meat_items_week': _count_meat_items(week_used),
+    }
+
+    return {'meal': meal, 'summary': summary, 'week_used': week_used}
 
 def generate_daily_plan(glucose_mg_dl=130, daily_kcal=2400, diet='veg', seed=None, week_used=None):
     """
