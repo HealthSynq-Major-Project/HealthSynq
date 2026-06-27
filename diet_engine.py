@@ -8,9 +8,9 @@ from collections import Counter
 from sqlalchemy import create_engine
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-print("=" * 80)
-print("DATABASE_URL =", DATABASE_URL)
-print("=" * 80)
+# print("=" * 80)
+# print("DATABASE_URL =", DATABASE_URL)
+# print("=" * 80)
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
