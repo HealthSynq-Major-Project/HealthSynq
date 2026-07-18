@@ -64,5 +64,5 @@ public class AuthDaoImpl implements AuthDao{
         List<Users> result = query.getResultList();
 
         return result.isEmpty() ? null : result.get(0);
-    }
+    } 
 }

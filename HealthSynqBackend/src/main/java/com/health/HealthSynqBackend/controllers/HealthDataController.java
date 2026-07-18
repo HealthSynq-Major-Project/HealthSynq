@@ -7,10 +7,7 @@ import com.health.HealthSynqBackend.service.HealthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/health")
@@ -42,5 +39,12 @@ public class HealthDataController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("/data")
+    public ResponseEntity<GenericResponse> getUserData(HttpServletRequest request){
+        int userId = (int)request.getAttribute("userId");
+        System.out.println(userId);
+        GenericResponse response = healthService.getUserProfile(userId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 }

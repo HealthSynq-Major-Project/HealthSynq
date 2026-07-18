@@ -297,6 +297,32 @@ public class HealthServiceImpl implements HealthService{
         }
     }
 
+    public GenericResponse getUserProfile(int userId){
+        Users theUser = healthDAO.findUserById(userId);
 
+        if(theUser == null){
+            throw new GenericBadRequestException("User not found");
+        }
+
+        UserProfile userProfile = healthDAO.findUserProfileByUser(theUser);
+
+        if(userProfile == null){
+            throw new GenericBadRequestException("Profile not found");
+        }
+        System.out.println("HEllo"+theUser);
+        System.out.println(userProfile);
+
+        Map<String,Object> healthData = new HashMap<>();
+
+        healthData.put("email",theUser.getEmail());
+        healthData.put("userName",theUser.getUserName());
+        healthData.put("gender",userProfile.getGender());
+        healthData.put("age",userProfile.getAge());
+        healthData.put("height",userProfile.getHeight());
+        healthData.put("weight",userProfile.getWeight());
+        healthData.put("isDiabetic",userProfile.isDiabetic());
+
+        return new GenericResponse(true,"User Profile Data",200,healthData);
+    }
 
 }

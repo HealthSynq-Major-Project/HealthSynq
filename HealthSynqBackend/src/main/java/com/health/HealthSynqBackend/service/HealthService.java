@@ -7,4 +7,5 @@ import com.health.HealthSynqBackend.dto.HealthDTO;
 public interface HealthService {
     public GenericResponse processHealthData(int userId, HealthDTO healthDTO);
     public GenericResponse updateGlucose(int userId, GlucoseDTO glucoseDTO);
+    public GenericResponse getUserProfile(int userId);
 }
