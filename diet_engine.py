@@ -23,7 +23,7 @@ engine = create_engine(
 warnings.filterwarnings('ignore')
 pd.set_option('display.max_colwidth', 55)
 pd.set_option('display.float_format', '{:.1f}'.format)
-# print('✅ Imports done')
+# print(' Imports done')
 # DATASET_PATH = 'Anuvaad_INDB_2024.xlsx'  
 # Replace with your actual Render external DB URL
 PER100G = ['food_code','food_name','servings_unit','energy_kcal','carb_g','protein_g','fat_g','freesugar_g','fibre_g']
@@ -458,7 +458,7 @@ def _add(items, row, role, kcal_b, carb_b, day_used, week_used):
 
 #     return items
 
-# # print('✅ optimize_calories() defined')
+# # print('optimize_calories() defined')
 def optimize_calories(items, spool, C, day_used, week_used, diet='veg', slot=None, pad_roles=None):
     if pad_roles is None:
         pad_roles = ['roti', 'dal', 'curd', 'snack']
@@ -660,7 +660,7 @@ def build_snack(pool, C, day_used, week_used, diet):
                 ku += dk; break
     return _to_df(items)
 
-# print('✅ Meal builders updated for stronger non-veg allocation')
+# print(Meal builders updated for stronger non-veg allocation')
 
 MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack']
 
@@ -975,7 +975,7 @@ def generate_daily_plan(glucose_mg_dl=130, daily_kcal=2400, diet='veg', seed=Non
     }
     return dict(breakfast=breakfast, lunch=lunch, dinner=dinner, snack=snack, summary=summary, week_used=week_used)
 
-# print('✅ generate_daily_plan() updated with weekly meat quota support')
+# print('generate_daily_plan() updated with weekly meat quota support')
 
 FMT = {'portions':'{:.0f}','kcal':'{:.0f}','carb_g':'{:.1f}','protein_g':'{:.1f}',
        'fat_g':'{:.1f}','fibre_g':'{:.1f}','glycemic_score':'{:.3f}','composite_score':'{:.3f}'}
@@ -995,13 +995,13 @@ FMT = {'portions':'{:.0f}','kcal':'{:.0f}','carb_g':'{:.1f}','protein_g':'{:.1f}
 #         valid = validate_meal(meal, slot)
 #         print(f"\n{'─'*72}")
         
-#         print(f"  Target {tgt:.0f} kcal → {got:.0f} kcal ({got/tgt*100:.0f}%)  {'✅ VALID' if valid else '⚠️ INCOMPLETE'}")
+#         print(f"  Target {tgt:.0f} kcal → {got:.0f} kcal ({got/tgt*100:.0f}%)  {' VALID' if valid else '⚠️ INCOMPLETE'}")
 #         print(f"{'─'*72}")
-#         if meal.empty: print('  ⚠️  No items')
+#         if meal.empty: print('    No items')
 #         else: display(meal[show_cols].style.format({k:v for k,v in FMT.items() if k in show_cols}).set_properties(**{'text-align':'left'}).hide(axis='index'))
-#     print(f"\n{'='*72}"); print('  📊 DAILY TOTALS')
+#     print(f"\n{'='*72}"); print('   DAILY TOTALS')
 #     print(f"  Energy: {s['total_kcal']:.0f}/{s['daily_kcal_target']:.0f} kcal ({pct:.1f}%)  |  Carbs: {s['total_carb_g']:.1f}g  |  Protein: {s['total_protein_g']:.1f}g  |  Fat: {s['total_fat_g']:.1f}g")
 #     print('='*72)
 
-# print('✅ display_plan() defined')
+# print('display_plan() defined')
 
