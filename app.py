@@ -6,7 +6,12 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 import pandas as pd
 
-from diet_engine import generate_daily_plan, generate_dynamic_meal, generate_dynamic_plan
+from diet_engine_final import (
+    generate_daily_plan,
+    generate_dynamic_meal,
+    generate_dynamic_plan,
+    regenerate_day_after_feedback,
+)
 from exercise_module.main import generate_workout
 app = FastAPI()
 
@@ -14,6 +19,7 @@ class DietRequest(BaseModel):
     glucose_mg_dl: float
     daily_kcal: int
     diet: str
+    week_used: dict[str, list[list[str]]] = Field(default_factory=dict)
 
 class DynamicDietRequest(BaseModel):
     glucose_mg_dl: float
@@ -37,6 +43,16 @@ class DynamicMealRequest(BaseModel):
     burn_compensation_ratio: float | None = None
     max_extra_kcal_ratio: float = 0.50
     already_used_foods: list[str] = Field(default_factory=list)
+    week_used: dict[str, list[list[str]]] = Field(default_factory=dict)
+
+class DietFeedbackRequest(BaseModel):
+    original_plan: dict
+    actual_intake: dict[str, dict[str, float]] = Field(default_factory=dict)
+    not_eaten: dict[str, list[str]] = Field(default_factory=dict)
+    completed_slots: list[str] = Field(default_factory=list)
+    burned_kcal_so_far: float = 0.0
+    burn_compensation_ratio: float | None = None
+    max_extra_kcal_ratio: float = 0.35
     week_used: dict[str, list[list[str]]] = Field(default_factory=dict)
 
 class WorkoutRequest(BaseModel):
@@ -71,6 +87,33 @@ def df_to_records(df):
     df = df.where(pd.notnull(df), None)
     return jsonable_encoder(df.to_dict(orient="records"))
 
+def plan_to_json(plan):
+    payload = {
+        "summary": plan["summary"],
+        "breakfast": df_to_records(plan["breakfast"]),
+        "lunch": df_to_records(plan["lunch"]),
+        "snack": df_to_records(plan["snack"]),
+        "dinner": df_to_records(plan["dinner"]),
+        "week_used": week_used_to_json(plan.get("week_used", {})),
+    }
+    if "confirmed_week_used" in plan:
+        payload["confirmed_week_used"] = week_used_to_json(plan.get("confirmed_week_used", {}))
+    return jsonable_encoder(payload)
+
+def meal_records_to_df(records):
+    if not records:
+        return pd.DataFrame()
+    return pd.DataFrame(records)
+
+def request_plan_to_engine_plan(raw_plan):
+    return {
+        "summary": raw_plan.get("summary", {}),
+        "breakfast": meal_records_to_df(raw_plan.get("breakfast", [])),
+        "lunch": meal_records_to_df(raw_plan.get("lunch", [])),
+        "snack": meal_records_to_df(raw_plan.get("snack", [])),
+        "dinner": meal_records_to_df(raw_plan.get("dinner", [])),
+    }
+
 def normalize_week_used(raw):
     out = {}
     for role, items in (raw or {}).items():
@@ -91,16 +134,11 @@ def generate_diet(req: DietRequest):
     plan = generate_daily_plan(
         glucose_mg_dl=req.glucose_mg_dl,
         daily_kcal=req.daily_kcal,
-        diet=req.diet
+        diet=req.diet,
+        week_used=normalize_week_used(req.week_used),
     )
 
-    return jsonable_encoder({
-        "summary": plan["summary"],
-        "breakfast": df_to_records(plan["breakfast"]),
-        "lunch": df_to_records(plan["lunch"]),
-        "dinner": df_to_records(plan["dinner"]),
-        "snack": df_to_records(plan["snack"]),
-    })
+    return plan_to_json(plan)
 
 @app.post("/generate-diet-dynamic")
 def generate_diet_dynamic(req: DynamicDietRequest):
@@ -119,14 +157,7 @@ def generate_diet_dynamic(req: DynamicDietRequest):
         week_used=normalize_week_used(req.week_used),
     )
 
-    return jsonable_encoder({
-        "summary": plan["summary"],
-        "breakfast": df_to_records(plan["breakfast"]),
-        "lunch": df_to_records(plan["lunch"]),
-        "dinner": df_to_records(plan["dinner"]),
-        "snack": df_to_records(plan["snack"]),
-        "week_used": week_used_to_json(plan["week_used"]),
-    })
+    return plan_to_json(plan)
 
 @app.post("/generate-meal-dynamic")
 def generate_meal_dynamic(req: DynamicMealRequest):
@@ -150,3 +181,20 @@ def generate_meal_dynamic(req: DynamicMealRequest):
         "meal": df_to_records(plan["meal"]),
         "week_used": week_used_to_json(plan["week_used"]),
     })
+
+@app.post("/regenerate-diet-after-feedback")
+def regenerate_diet_after_feedback(req: DietFeedbackRequest):
+    ratio = req.burn_compensation_ratio if req.burn_compensation_ratio is not None else 0.50
+
+    plan = regenerate_day_after_feedback(
+        original_plan=request_plan_to_engine_plan(req.original_plan),
+        actual_intake=req.actual_intake,
+        not_eaten=req.not_eaten,
+        completed_slots=req.completed_slots,
+        burned_kcal_so_far=req.burned_kcal_so_far,
+        burn_compensation_ratio=ratio,
+        max_extra_kcal_ratio=req.max_extra_kcal_ratio,
+        previous_week_used=normalize_week_used(req.week_used),
+    )
+
+    return plan_to_json(plan)
