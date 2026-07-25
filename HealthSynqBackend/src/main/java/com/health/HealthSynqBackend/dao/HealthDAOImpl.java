@@ -1,12 +1,16 @@
 package com.health.HealthSynqBackend.dao;
 
 import com.health.HealthSynqBackend.entities.*;
+import com.health.HealthSynqBackend.enums.MealType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
+import jakarta.transaction.Transactional;
 import org.apache.catalina.User;
+import org.apache.commons.lang3.reflect.Typed;
 import org.springframework.stereotype.Repository;
 
 import java.lang.reflect.Type;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -94,6 +98,112 @@ public class HealthDAOImpl implements HealthDAO{
     @Override
     public void saveGlucoseLog(UserGlucoseLog userGlucoseLog){
         entityManager.persist(userGlucoseLog);
+    }
+
+
+    @Override
+    public UserDailyDiet findTodayDiet(Users user){
+        LocalDate today = LocalDate.now();
+
+        TypedQuery<UserDailyDiet> query = entityManager.createQuery("Select d from UserDailyDiet d Where d.user = :user and d.dietDate = :today",UserDailyDiet.class);
+
+        query.setParameter("user",user);
+        query.setParameter("today",today);
+
+        List<UserDailyDiet> result = query.getResultList();
+        return result.isEmpty() ? null : result.get(0);
+    }
+
+    @Override
+    @Transactional
+    public void saveUserDailyDiet(UserDailyDiet dailyDiet) {
+        entityManager.persist(dailyDiet);
+    }
+
+    @Override
+    @Transactional
+    public void updateUserDailyDiet(UserDailyDiet dailyDiet) {
+        entityManager.merge(dailyDiet);
+    }
+
+    @Override
+    @Transactional
+    public void saveUserDailyMeal(UserDailyMeal meal) {
+        entityManager.persist(meal);
+    }
+
+    @Override
+    public List<UserDailyMeal> findMealsByDailyDiet(UserDailyDiet dailyDiet) {
+        TypedQuery<UserDailyMeal> query =
+                entityManager.createQuery(
+                        "SELECT m FROM UserDailyMeal m " +
+                                "WHERE m.userDailyDiet = :dailyDiet " +
+                                "ORDER BY m.mealType",
+                        UserDailyMeal.class
+                );
+        query.setParameter("dailyDiet", dailyDiet);
+        return query.getResultList();
+    }
+
+    @Override
+    public UserDailyMeal findMealByType(UserDailyDiet dailyDiet,
+                                        MealType mealType) {
+        TypedQuery<UserDailyMeal> query =
+                entityManager.createQuery(
+                        "SELECT m FROM UserDailyMeal m " +
+                                "WHERE m.userDailyDiet = :dailyDiet " +
+                                "AND m.mealType = :mealType",
+                        UserDailyMeal.class
+                );
+        query.setParameter("dailyDiet", dailyDiet);
+        query.setParameter("mealType", mealType);
+
+        List<UserDailyMeal> result = query.getResultList();
+        return result.isEmpty() ? null : result.get(0);
+    }
+
+    @Override
+    public UserWeeklyFoodHistory findCurrentWeekHistory(
+            Users user,
+            LocalDate weekStartDate) {
+
+        TypedQuery<UserWeeklyFoodHistory> query =
+                entityManager.createQuery(
+                        "SELECT w FROM UserWeeklyFoodHistory w " +
+                                "WHERE w.user = :user " +
+                                "AND w.weekStartDate = :weekStart",
+                        UserWeeklyFoodHistory.class
+                );
+
+        query.setParameter("user", user);
+        query.setParameter("weekStart", weekStartDate);
+
+        List<UserWeeklyFoodHistory> result = query.getResultList();
+
+        return result.isEmpty() ? null : result.get(0);
+    }
+
+    @Override
+    @Transactional
+    public void saveWeeklyFoodHistory(UserWeeklyFoodHistory history) {
+        entityManager.persist(history);
+    }
+
+    @Override
+    @Transactional
+    public void updateWeeklyFoodHistory(UserWeeklyFoodHistory history) {
+        entityManager.merge(history);
+    }
+
+
+    // Helper Functions
+
+    public LocalDate getWeekStart(LocalDate date){
+        return date.with(DayOfWeek.MONDAY);
+    }
+
+    public LocalDate getWeekEnd(LocalDate date){
+        return date.with(DayOfWeek.SUNDAY);
     }
 
 }

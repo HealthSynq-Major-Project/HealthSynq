@@ -125,7 +125,7 @@ public class HealthServiceImpl implements HealthService{
             throw new GenericBadRequestException("User Profile not Found");
         }
 
-        int kcal = calculateDailyKcal(userProfile, current, userGoal,(int) daysLeft);
+        int kcal = calculateDailyKcal(userProfile, userGoal,(int) daysLeft);
 
         current.setDailyKcal(kcal);
         current.setUpdatedAt(LocalDateTime.now());
@@ -152,66 +152,91 @@ public class HealthServiceImpl implements HealthService{
     }
 
     private int calculateDailyKcal(UserProfile profile,
-                                   UserCurrentHealth current,
                                    UserGoal goal,
                                    int daysLeft) {
 
-        // 🔹 BASIC USER DATA
-        double weightKg = profile.getWeight() / 1000.0;
+        // STEP 1 : Basic User Data
+        double currentWeightKg = profile.getWeight() / 1000.0;
+        double targetWeightKg = goal.getTargetWeight() / 1000.0;
+
         int height = profile.getHeight();
         int age = profile.getAge();
         String gender = profile.getGender();
 
-        double goalWeightKg = goal.getTargetWeight() / 1000.0;
+        // Prevent division by zero
+        daysLeft = Math.max(daysLeft, 1);
 
-        // 🔹 STEP 1: BMR
+        // STEP 2 : Calculate BMR (Mifflin-St Jeor Formula)
         double bmr;
+
         if ("male".equalsIgnoreCase(gender)) {
-            bmr = 10 * weightKg + 6.25 * height - 5 * age + 5;
+            bmr = (10 * currentWeightKg)
+                    + (6.25 * height)
+                    - (5 * age)
+                    + 5;
         } else {
-            bmr = 10 * weightKg + 6.25 * height - 5 * age - 161;
+            bmr = (10 * currentWeightKg)
+                    + (6.25 * height)
+                    - (5 * age)
+                    - 161;
         }
 
-        // 🔹 STEP 2: Weight change required
-        double weightChange = goalWeightKg - weightKg;
+        // STEP 3 : Default Activity Factor
+        // Later this can come from profile.getActivityLevel()
+        double activityFactor = 1.375;
 
-        // 🔹 STEP 3: Weekly weight change (based on daysLeft)
-        double safeDays = Math.max(daysLeft, 7);
+        // STEP 4 : Maintenance Calories
+        double maintenanceCalories = bmr * activityFactor;
 
-        double weeklyChange = Math.abs(weightChange) / (safeDays / 7.0);
+        // STEP 5 : Goal Based Adjustment
+        double weightDifference = targetWeightKg - currentWeightKg;
 
+        // Approx. calories required to gain/lose 1 kg
+        double totalCalorieAdjustment = weightDifference * 7700;
 
-        double activityFactor;
-        if (weeklyChange < 0.25) {
-            activityFactor = 1.2;
-        } else if (weeklyChange < 0.5) {
-            activityFactor = 1.375;
-        } else if (weeklyChange < 1.0) {
-            activityFactor = 1.55;
-        } else if (weeklyChange < 1.5) {
-            activityFactor = 1.725;
-        } else {
-            activityFactor = 1.9;
-        }
+        double dailyCalorieAdjustment =
+                totalCalorieAdjustment / daysLeft;
 
-        // 🔹 STEP 4: TDEE
-        double tdee = bmr * activityFactor;
+        // STEP 6 : Final Daily Target
+        double targetCalories =
+                maintenanceCalories + dailyCalorieAdjustment;
 
-        // 🔹 STEP 5: Total calorie change (7700 kcal per kg)
-        double totalCalorieChange = weightChange * 7700;
-
-        // 🔹 STEP 6: Daily calorie adjustment (IMPORTANT CHANGE)
-        double dailyCalorieChange = totalCalorieChange / daysLeft;
-
-        // 🔹 STEP 7: Final calories
-        double targetCalories = tdee + dailyCalorieChange;
-
-        // 🔹 STEP 8: Safety clamp
+        // STEP 7 : Safety Limits
         if ("male".equalsIgnoreCase(gender)) {
-            targetCalories = Math.max(targetCalories, 1500);
+
+            if (targetCalories < 1500) {
+                targetCalories = 1500;
+            }
+
+            if (targetCalories > 3200) {
+                targetCalories = 3200;
+            }
+
         } else {
-            targetCalories = Math.max(targetCalories, 1200);
+
+            if (targetCalories < 1200) {
+                targetCalories = 1200;
+            }
+
+            if (targetCalories > 2800) {
+                targetCalories = 2800;
+            }
         }
+
+        // Debug Logs (Remove Later)
+        System.out.println("\n========== DAILY KCAL CALCULATION ==========");
+        System.out.println("Current Weight : " + currentWeightKg + " kg");
+        System.out.println("Target Weight  : " + targetWeightKg + " kg");
+        System.out.println("Height         : " + height + " cm");
+        System.out.println("Age            : " + age);
+        System.out.println("Gender         : " + gender);
+        System.out.println("Days Left      : " + daysLeft);
+        System.out.println("BMR            : " + bmr);
+        System.out.println("ActivityFactor : " + activityFactor);
+        System.out.println("Maintenance    : " + maintenanceCalories);
+        System.out.println("Daily Adjust   : " + dailyCalorieAdjustment);
+        System.out.println("Target Kcal    : " + targetCalories);
+        System.out.println("============================================\n");
 
         return (int) Math.round(targetCalories);
     }

@@ -33,6 +33,8 @@ public class HealthDataController {
     @PostMapping("/glucose")
     public ResponseEntity<GenericResponse> saveGlucoseLevels(HttpServletRequest request,  @RequestBody GlucoseDTO glucoseDTO){
         int userId = (int) request.getAttribute("userId");
+        System.out.println(userId);
+        System.out.println(glucoseDTO.getGlucose());
 
         GenericResponse response = healthService.updateGlucose(userId,glucoseDTO);
 
