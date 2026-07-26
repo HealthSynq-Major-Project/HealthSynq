@@ -29,4 +29,6 @@ public interface HealthDAO {
     void saveWeeklyFoodHistory(UserWeeklyFoodHistory history);
     void updateWeeklyFoodHistory(UserWeeklyFoodHistory history);
     void deleteDailyMeals(UserDailyDiet dailyDiet);
+
+    List<UserGlucoseLog> findLastThreeGlucoseLogs(Users user);
 }

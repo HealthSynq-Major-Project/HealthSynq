@@ -86,7 +86,7 @@ public class HealthDAOImpl implements HealthDAO{
 
     @Override
     public UserGlucoseLog findLatestGlucose(Users user){
-        TypedQuery<UserGlucoseLog> theQuery = entityManager.createQuery("from UserGlucoseLog g Where g.user = :user Order By g.recordedAt DESC",UserGlucoseLog.class);
+        TypedQuery<UserGlucoseLog> theQuery = entityManager.createQuery("from UserGlucoseLog g Where g.users = :user Order By g.recordedAt DESC",UserGlucoseLog.class);
 
         theQuery.setParameter("user",user);
         theQuery.setMaxResults(1);
@@ -202,6 +202,19 @@ public class HealthDAOImpl implements HealthDAO{
                         "DELETE FROM UserDailyMeal m WHERE m.userDailyDiet = :diet")
                 .setParameter("diet", dailyDiet)
                 .executeUpdate();
+    }
+
+    @Override
+    public List<UserGlucoseLog> findLastThreeGlucoseLogs(Users user) {
+
+        return entityManager.createQuery(
+                        "SELECT g FROM UserGlucoseLog g " +
+                                "WHERE g.users = :user " +
+                                "ORDER BY g.recordedAt DESC",
+                        UserGlucoseLog.class)
+                .setParameter("user", user)
+                .setMaxResults(3)
+                .getResultList();
     }
 
 

@@ -41,6 +41,14 @@ public class HealthDataController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("/glucose")
+    public ResponseEntity<GenericResponse> getGlucoseLevels(HttpServletRequest request){
+        int userId = (int) request.getAttribute("userId");
+
+        GenericResponse response = healthService.getGlucoseHistory(userId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
     @GetMapping("/data")
     public ResponseEntity<GenericResponse> getUserData(HttpServletRequest request){
         int userId = (int)request.getAttribute("userId");

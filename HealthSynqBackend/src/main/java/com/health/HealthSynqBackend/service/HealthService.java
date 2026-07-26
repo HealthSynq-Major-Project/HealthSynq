@@ -8,4 +8,5 @@ public interface HealthService {
     public GenericResponse processHealthData(int userId, HealthDTO healthDTO);
     public GenericResponse updateGlucose(int userId, GlucoseDTO glucoseDTO);
     public GenericResponse getUserProfile(int userId);
+    public GenericResponse getGlucoseHistory(int userId);
 }

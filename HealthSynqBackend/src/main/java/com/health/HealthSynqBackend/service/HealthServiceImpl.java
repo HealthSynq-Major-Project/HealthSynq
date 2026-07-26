@@ -3,6 +3,7 @@ package com.health.HealthSynqBackend.service;
 import com.health.HealthSynqBackend.dao.HealthDAO;
 import com.health.HealthSynqBackend.dto.GenericResponse;
 import com.health.HealthSynqBackend.dto.GlucoseDTO;
+import com.health.HealthSynqBackend.dto.GlucoseHistoryDTO;
 import com.health.HealthSynqBackend.dto.HealthDTO;
 import com.health.HealthSynqBackend.entities.*;
 import com.health.HealthSynqBackend.exception.GenericBadRequestException;
@@ -12,7 +13,9 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -280,11 +283,27 @@ public class HealthServiceImpl implements HealthService{
 
         healthDAO.saveUserCurrentHealth(userCurrentHealth);
 
+        List<UserGlucoseLog> glucoseLogs = healthDAO.findLastThreeGlucoseLogs(user);
+        List<GlucoseHistoryDTO> history = new ArrayList<>();
+
+        for (UserGlucoseLog log : glucoseLogs) {
+            GlucoseHistoryDTO dto = new GlucoseHistoryDTO();
+            dto.setGlucose(log.getGlucoseLevel());
+            dto.setUnit("mg/dL");
+            dto.setRecordedAt(log.getRecordedAt());
+            history.add(dto);
+
+        }
+
+        Map<String, Object> data = new HashMap<>();
+
+        data.put("last3Days", history);
+
         return new GenericResponse(
                 true,
                 "Glucose level updated successfully",
                 200,
-                null
+                data
         );
     }
 
@@ -348,6 +367,33 @@ public class HealthServiceImpl implements HealthService{
         healthData.put("isDiabetic",userProfile.isDiabetic());
 
         return new GenericResponse(true,"User Profile Data",200,healthData);
+    }
+
+    @Override
+    public GenericResponse getGlucoseHistory(int userId){
+        Users user = healthDAO.findUserById(userId);
+        if (user == null) {throw new GenericBadRequestException("User not found");}
+
+        List<UserGlucoseLog> glucoseLogs = healthDAO.findLastThreeGlucoseLogs(user);
+
+        List<GlucoseHistoryDTO> history = new ArrayList<>();
+
+        for (UserGlucoseLog log : glucoseLogs) {
+            GlucoseHistoryDTO dto = new GlucoseHistoryDTO();
+            dto.setGlucose(log.getGlucoseLevel());
+            dto.setUnit("mg/dL");
+            dto.setRecordedAt(log.getRecordedAt());
+            history.add(dto);
+        }
+        Map<String, Object> data = new HashMap<>();
+
+        data.put("last3Days", history);
+
+        return new GenericResponse(true,
+                "Glucose history fetched successfully.",
+                200,
+                data
+        );
     }
 
 }
