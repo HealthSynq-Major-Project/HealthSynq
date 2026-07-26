@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.health.HealthSynqBackend.dao.HealthDAO;
 import com.health.HealthSynqBackend.dto.GenericResponse;
+import com.health.HealthSynqBackend.dto.PythonRegenerateDietRequest;
+import com.health.HealthSynqBackend.dto.RegenerateDietAfterFeedbackRequest;
 import com.health.HealthSynqBackend.entities.*;
 import com.health.HealthSynqBackend.enums.DietStatus;
 import com.health.HealthSynqBackend.enums.MealStatus;
@@ -65,7 +67,6 @@ public class DietServiceImpl implements DietService{
     }
 
     private GenericResponse buildGenerateDietResponse(UserDailyDiet userDailyDiet,Map<String, Object> mlResponse) {
-
         GenericResponse response = new GenericResponse();
 
         Map<String,Object> responseData = new HashMap<>();
@@ -80,14 +81,11 @@ public class DietServiceImpl implements DietService{
         response.setTimeStamp(System.currentTimeMillis());
 
         response.setData(responseData);
-
         return response;
     }
 
     private GenericResponse buildExistingDietResponse(UserDailyDiet dailyDiet) {
-
         try {
-
             ObjectMapper objectMapper = new ObjectMapper();
 
             Map<String, Object> dietPlan = objectMapper.readValue(
@@ -243,8 +241,8 @@ public class DietServiceImpl implements DietService{
 
             dailyDiet.setConsumedCalories(0.0);
             dailyDiet.setTargetCalories(currentHealth.getDailyKcal().doubleValue());
-            dailyDiet.setBurnedCalories(currentHealth.getCaloriesBurned().doubleValue());
-            dailyDiet.setRemainingCalories(currentHealth.getDailyKcal().doubleValue() + currentHealth.getCaloriesBurned().doubleValue());
+            dailyDiet.setBurnedCalories(0.0);
+            dailyDiet.setRemainingCalories(currentHealth.getDailyKcal().doubleValue());
 
             dailyDiet.setStatus(DietStatus.GENERATED);
 
@@ -327,10 +325,20 @@ public class DietServiceImpl implements DietService{
         request.put("daily_kcal", currentHealth.getDailyKcal());
         request.put("diet", currentHealth.getDietPreference());
 
-        if (weeklyHistory != null && weeklyHistory.getWeekUsedJson() != null) {
-            request.put("week_used", weeklyHistory.getWeekUsedJson());
-        } else {
-            request.put("week_used", new HashMap<>());
+        ObjectMapper mapper = new ObjectMapper();
+
+        try {
+            if (weeklyHistory != null && weeklyHistory.getWeekUsedJson() != null && !weeklyHistory.getWeekUsedJson().isBlank()) {
+                request.put("week_used", mapper.readValue(
+                                    weeklyHistory.getWeekUsedJson(),
+                                    new TypeReference<Map<String, Object>>() {}
+                        )
+                );
+            } else {
+                request.put("week_used", new HashMap<>());
+            }
+        } catch (JsonProcessingException e) {
+            throw new GenericBadRequestException("Unable to prepare diet request.");
         }
         return request;
     }
@@ -401,4 +409,185 @@ public class DietServiceImpl implements DietService{
 
         return base;
     }
+
+//    Regenerate Diet after feedback
+    @Override
+    public GenericResponse regenerateDietAfterFeedback(int userId, RegenerateDietAfterFeedbackRequest request){
+        try {
+            Users user = validateUser(userId);
+            UserDailyDiet dailyDiet = validateTodayDiet(user);
+            Map<String, Object> currentDietPlan = getCurrentDietPlan(dailyDiet);
+            UserWeeklyFoodHistory weeklyFoodHistory = getWeeklyFoodHistory(user);
+
+            PythonRegenerateDietRequest pythonRequest = prepareRegenerateDietRequest(currentDietPlan, weeklyFoodHistory, request);
+
+            Map<String, Object> mlResponse = callRegenerateDietAPI(pythonRequest);
+
+            updateCurrentDiet(dailyDiet, mlResponse);
+
+            replaceDailyMeals(dailyDiet, mlResponse);
+
+            updateWeeklyFoodHistory(user, weeklyFoodHistory, mlResponse);
+
+            return buildRegenerateDietResponse(dailyDiet, mlResponse);
+        }catch (GenericBadRequestException e){
+            e.printStackTrace();
+            throw e;
+        }
+        catch (Exception e){
+            e.printStackTrace();
+
+            throw new GenericBadRequestException("Unable to regenerate diet.");
+        }
+    }
+
+    private UserDailyDiet validateTodayDiet(Users user) {
+        UserDailyDiet dailyDiet = healthDAO.findTodayDiet(user);
+
+        if (dailyDiet == null) {
+            throw new GenericBadRequestException(
+                    "Today's diet not found. Generate diet first."
+            );
+        }
+        return dailyDiet;
+    }
+
+    private Map<String, Object> getCurrentDietPlan(UserDailyDiet dailyDiet) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.readValue(dailyDiet.getCurrentPlanJson(), new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            throw new GenericBadRequestException("Unable to read current diet plan.");
+        }
+    }
+
+    private PythonRegenerateDietRequest prepareRegenerateDietRequest(Map<String,Object> currentDietPlan, UserWeeklyFoodHistory weeklyFoodHistory, RegenerateDietAfterFeedbackRequest request){
+        PythonRegenerateDietRequest pythonRequest = new PythonRegenerateDietRequest();
+
+        pythonRequest.setOriginalPlan(currentDietPlan);
+
+        pythonRequest.setActualIntake(request.getActualIntake());
+
+        pythonRequest.setNotEaten(request.getNotEaten());
+
+        pythonRequest.setCompletedSlots(request.getCompletedSlots());
+
+        try {
+
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            if (weeklyFoodHistory != null && weeklyFoodHistory.getWeekUsedJson() != null && !weeklyFoodHistory.getWeekUsedJson().isBlank()) {
+                Map<String, Object> weekUsed = objectMapper.readValue(weeklyFoodHistory.getWeekUsedJson(), new TypeReference<Map<String, Object>>() {});
+                pythonRequest.setWeekUsed(weekUsed);
+            } else {
+                pythonRequest.setWeekUsed(new HashMap<>());
+            }
+
+        } catch (Exception e) {
+            throw new GenericBadRequestException("Unable to prepare regeneration request.");
+        }
+
+        return pythonRequest;
+    }
+
+    private Map<String, Object> callRegenerateDietAPI(PythonRegenerateDietRequest request){
+        RestTemplate restTemplate = new RestTemplate();
+
+        String mlUrl = "https://healthsynq-kefa.onrender.com/regenerate-diet-after-feedback";
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(mlUrl, request, Map.class);
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new GenericBadRequestException("ML service failed");
+            }
+            return response.getBody();
+        } catch (Exception e) {
+            throw new GenericBadRequestException("Diet regeneration service unavailable");
+        }
+    }
+
+    private void updateCurrentDiet(
+            UserDailyDiet dailyDiet,
+            Map<String, Object> mlResponse) {
+
+        try {
+
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            dailyDiet.setCurrentPlanJson(objectMapper.writeValueAsString(mlResponse));
+
+            dailyDiet.setSummaryJson(objectMapper.writeValueAsString(mlResponse.get("summary")));
+
+            dailyDiet.setUpdatedAt(LocalDateTime.now());
+            healthDAO.updateUserDailyDiet(dailyDiet);
+
+        } catch (JsonProcessingException e) {
+            throw new GenericBadRequestException("Unable to update current diet.");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void replaceDailyMeals(
+            UserDailyDiet dailyDiet,
+            Map<String, Object> mlResponse) {
+
+        // Remove existing meals
+        healthDAO.deleteDailyMeals(dailyDiet);
+
+        // Read new meal calories
+        Map<String, Object> summary =
+                (Map<String, Object>) mlResponse.get("summary");
+
+        Map<String, Object> mealKcal =
+                (Map<String, Object>) summary.get("meal_kcal");
+
+        // Create fresh meals
+        createMeal(
+                dailyDiet,
+                MealType.BREAKFAST,
+                ((Number) mealKcal.get("breakfast")).doubleValue()
+        );
+
+        createMeal(
+                dailyDiet,
+                MealType.LUNCH,
+                ((Number) mealKcal.get("lunch")).doubleValue()
+        );
+
+        createMeal(
+                dailyDiet,
+                MealType.SNACK,
+                ((Number) mealKcal.get("snack")).doubleValue()
+        );
+
+        createMeal(
+                dailyDiet,
+                MealType.DINNER,
+                ((Number) mealKcal.get("dinner")).doubleValue()
+        );
+    }
+
+    private GenericResponse buildRegenerateDietResponse(
+            UserDailyDiet dailyDiet,
+            Map<String, Object> mlResponse) {
+
+        GenericResponse response = new GenericResponse();
+
+        Map<String, Object> responseData = new HashMap<>();
+
+        responseData.put("dietId", dailyDiet.getId());
+        responseData.put("dietDate", dailyDiet.getDietDate());
+        responseData.put("status", dailyDiet.getStatus());
+        responseData.put("dietPlan", mlResponse);
+
+        response.setSuccess(true);
+        response.setMessage("Diet regenerated successfully.");
+        response.setStatusCode(200);
+        response.setTimeStamp(System.currentTimeMillis());
+        response.setData(responseData);
+
+        return response;
+    }
+
 }

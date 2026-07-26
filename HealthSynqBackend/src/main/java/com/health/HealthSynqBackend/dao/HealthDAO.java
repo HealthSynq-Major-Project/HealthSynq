@@ -28,4 +28,5 @@ public interface HealthDAO {
     UserWeeklyFoodHistory findCurrentWeekHistory(Users user, LocalDate startWeekDate);
     void saveWeeklyFoodHistory(UserWeeklyFoodHistory history);
     void updateWeeklyFoodHistory(UserWeeklyFoodHistory history);
+    void deleteDailyMeals(UserDailyDiet dailyDiet);
 }

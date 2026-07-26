@@ -195,6 +195,15 @@ public class HealthDAOImpl implements HealthDAO{
         entityManager.merge(history);
     }
 
+    @Override
+    @Transactional
+    public void deleteDailyMeals(UserDailyDiet dailyDiet) {
+        entityManager.createQuery(
+                        "DELETE FROM UserDailyMeal m WHERE m.userDailyDiet = :diet")
+                .setParameter("diet", dailyDiet)
+                .executeUpdate();
+    }
+
 
     // Helper Functions
 
