@@ -60,8 +60,10 @@ public class DietServiceImpl implements DietService{
 
             return buildGenerateDietResponse( dailyDiet,  mlResponse);
         }catch (GenericBadRequestException e){
+            e.printStackTrace();
             throw e;
         }catch (Exception e){
+            e.printStackTrace();
             throw new GenericBadRequestException("Unable to Generate Diet");
         }
     }
