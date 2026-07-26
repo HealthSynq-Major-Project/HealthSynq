@@ -16,6 +16,6 @@ public class ExerciseController {
     public GenericResponse getWorkout(HttpServletRequest request, @RequestParam String category){
         int user_id = (int) request.getAttribute("userId");
         System.out.println(category);
-        return exerciseService.getWorkout(category);
+        return exerciseService.getWorkout(user_id,category);
     }
 }
