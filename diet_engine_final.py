@@ -308,6 +308,8 @@ def tune_constraints_for_diet(C, glucose_mg_dl, daily_kcal, diet):
         multipliers = {'breakfast': 1.25, 'lunch': 1.35, 'dinner': 1.35, 'snack': 1.15}
     elif glucose_mg_dl <= 250 and daily_kcal >= 2000:
         multipliers = {'breakfast': 1.15, 'lunch': 1.20, 'dinner': 1.20, 'snack': 1.10}
+    elif daily_kcal >= 1600:
+        multipliers = {'breakfast': 1.08, 'lunch': 1.12, 'dinner': 1.12, 'snack': 1.05}
     else:
         multipliers = {'breakfast': 1.0, 'lunch': 1.0, 'dinner': 1.0, 'snack': 1.0}
 
