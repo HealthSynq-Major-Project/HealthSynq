@@ -33,15 +33,12 @@ public class UserDailyDiet {
     @Column(name = "remaining_calories", nullable = false)
     private Double remainingCalories;
 
-    @Lob
     @Column(name = "original_plan", columnDefinition = "TEXT")
     private String originalPlanJson;
 
-    @Lob
     @Column(name = "current_plan", columnDefinition = "TEXT")
     private String currentPlanJson;
 
-    @Lob
     @Column(name = "summary", columnDefinition = "TEXT")
     private String summaryJson;
 

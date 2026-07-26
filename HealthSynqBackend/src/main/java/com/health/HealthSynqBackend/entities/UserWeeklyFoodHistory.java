@@ -24,7 +24,6 @@ public class UserWeeklyFoodHistory {
     @Column(name = "week_end_date", nullable = false)
     private LocalDate weekEndDate;
 
-    @Lob
     @Column(name = "week_used_json", columnDefinition = "TEXT")
     private String weekUsedJson;
 
