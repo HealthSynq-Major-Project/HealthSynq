@@ -455,7 +455,7 @@ def pick_item(slot_pool, role, kcal_b, carb_b, gs_cap, day_used, week_used,
 def scale_portions(row, role, kcal_b, carb_b):
     max_srv = MAX_SRV.get(role, 1)
     if role == 'breakfast_carb' and row['srv_kcal'] < 200:
-        max_srv = max(3, int(np.ceil(320 / row['srv_kcal'])))
+        max_srv = min(6, max(3, int(np.ceil(320 / row['srv_kcal']))))
     mk = int(kcal_b // row['srv_kcal'])
     mc = int(carb_b // row['srv_carb']) if row['srv_carb'] > 0 else max_srv
     p  = max(MIN_SRV.get(role,1), min(mk, mc, max_srv))
